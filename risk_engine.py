@@ -1,87 +1,40 @@
-import os
-from dotenv import load_dotenv
-from utils import log_event
+from datetime import datetime
 
-load_dotenv()
+_price_peaks = {}
+_positions = {}
+_day_pnl = 0
 
-# Risk Configuration from .env
-MAX_CAPITAL = float(os.getenv("MAX_CAPITAL", 50000))
-MAX_DAILY_LOSS = float(os.getenv("MAX_DAILY_LOSS", 1000))
-MAX_DAILY_PROFIT = float(os.getenv("MAX_DAILY_PROFIT", 2000))
-STOP_LOSS_PERCENT = float(os.getenv("STOP_LOSS_PERCENT", 2))  # Percentage stop-loss
-
-# State Variables
-trade_log = []
-daily_pnl = 0
-open_trades = {}  # Format: { "RELIANCE": {"side": "BUY", "price": 200.0, "qty": 1} }
-
-# Can place new trade?
-def can_trade():
-    if daily_pnl <= -MAX_DAILY_LOSS:
-        log_event("Daily loss limit hit. Stopping trades.")
-        return False
-    if daily_pnl >= MAX_DAILY_PROFIT:
-        log_event("Daily profit target reached. Locking profits.")
-        return False
-    return True
-
-# Update daily PnL
-def update_pnl(symbol, pnl):
-    global daily_pnl
-    daily_pnl += pnl
-    log_event(f"Updated daily PnL: {daily_pnl:.2f}")
-
-# Log closed trade and PnL
-def record_trade(symbol, qty, buy_price, sell_price):
-    pnl = (sell_price - buy_price) * qty
-    update_pnl(symbol, pnl)
-    trade_log.append({
-        "symbol": symbol,
-        "qty": qty,
-        "buy": buy_price,
-        "sell": sell_price,
-        "pnl": pnl
-    })
-
-# Get current position (if any)
-def get_position(symbol):
-    return open_trades.get(symbol)
-
-# Save new open position
-def set_position(symbol, side, price, qty):
-    open_trades[symbol] = {
+def set_position(symbol, side, entry_price, qty):
+    _positions[symbol] = {
         "side": side,
-        "price": price,
-        "qty": qty
+        "price": entry_price,
+        "qty": qty,
+        "entry_time": datetime.now()
     }
+    _price_peaks[symbol] = entry_price
 
-# Remove position from memory
+def get_position(symbol):
+    return _positions.get(symbol)
+
 def clear_position(symbol):
-    if symbol in open_trades:
-        del open_trades[symbol]
+    _positions.pop(symbol, None)
+    _price_peaks.pop(symbol, None)
 
-# Default capital per trade (1/10th of MAX_CAPITAL)
-def get_capital_per_trade():
-    return MAX_CAPITAL / 10
+def update_peak(symbol, ltp):
+    if symbol not in _price_peaks or ltp > _price_peaks[symbol]:
+        _price_peaks[symbol] = ltp
 
-# Get all open BUY positions
-def get_all_open_positions():
-    return {
-        symbol: pos for symbol, pos in open_trades.items()
-        if pos.get("side") == "BUY"
-    }
+def get_peak(symbol):
+    return _price_peaks.get(symbol, None)
 
-# Check if symbol's LTP has breached stop-loss
-def check_stop_loss(symbol, current_price):
-    position = open_trades.get(symbol)
-    if not position or position["side"] != "BUY":
-        return False
+def update_day_pnl(pnl):
+    global _day_pnl
+    _day_pnl += pnl
 
-    buy_price = position["price"]
-    sl_price = buy_price * (1 - STOP_LOSS_PERCENT / 100)
+def can_trade():
+    limit_profit = 2000
+    limit_loss = -1000
+    return _day_pnl < limit_profit and _day_pnl > limit_loss
 
-    if current_price <= sl_price:
-        log_event(f"[STOP-LOSS] {symbol} breached SL. Buy @ ₹{buy_price:.2f}, LTP @ ₹{current_price:.2f}, SL @ ₹{sl_price:.2f}")
-        return True
-    return False
-
+def get_open_positions():
+    return list(_positions.keys())
