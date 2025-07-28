@@ -1,7 +1,9 @@
+# risk_engine.py
+
 from datetime import datetime
 
-_price_peaks = {}
 _positions = {}
+_price_peaks = {}
 _day_pnl = 0
 
 def set_position(symbol, side, entry_price, qty):
@@ -14,11 +16,13 @@ def set_position(symbol, side, entry_price, qty):
     _price_peaks[symbol] = entry_price
 
 def get_position(symbol):
-    return _positions.get(symbol)
+    return _positions.get(symbol, None)
 
 def clear_position(symbol):
-    _positions.pop(symbol, None)
-    _price_peaks.pop(symbol, None)
+    if symbol in _positions:
+        del _positions[symbol]
+    if symbol in _price_peaks:
+        del _price_peaks[symbol]
 
 def update_peak(symbol, ltp):
     if symbol not in _price_peaks or ltp > _price_peaks[symbol]:
@@ -32,9 +36,7 @@ def update_day_pnl(pnl):
     _day_pnl += pnl
 
 def can_trade():
-    limit_profit = 2000
-    limit_loss = -1000
-    return _day_pnl < limit_profit and _day_pnl > limit_loss
+    return -1000 < _day_pnl < 2000
 
 def get_open_positions():
     return list(_positions.keys())
