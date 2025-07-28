@@ -1,5 +1,6 @@
 # state_manager.py
 
+# 🧠 In-memory bot status flag
 state = {
     "running": False
 }
